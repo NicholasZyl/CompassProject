@@ -22,7 +22,7 @@ import android.widget.ImageView;
 
 import com.z.nicolas.compassproject.utils.LowPassFilter;
 
-public class CompassActivity extends Activity implements SensorEventListener, LocationListener {
+public class CompassActivity extends Activity {
 
     private static final int ROTATION_ANIMATION_DURATION = 250;
     public static final int ACCESS_LOCATION_PERMISSIONS_REQUEST = 101;
@@ -33,8 +33,68 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
     private Sensor accelerometerSensor;
     private Sensor magnetometerSensor;
 
+    private SensorEventListener sensorListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            switch (event.sensor.getType()) {
+                case Sensor.TYPE_ACCELEROMETER:
+                    setAccelerometerData(event);
+                    break;
+                case Sensor.TYPE_MAGNETIC_FIELD:
+                    setMagnetometerData(event);
+                    break;
+            }
+
+            if (isGravitySet && isMagneticFieldSet) {
+                rotateRose();
+            }
+        }
+
+        private void setAccelerometerData(SensorEvent event) {
+            accelerometerData = LowPassFilter.filter(event.values.clone(), accelerometerData);
+            isGravitySet = true;
+        }
+
+        private void setMagnetometerData(SensorEvent event) {
+            magnetometerData = LowPassFilter.filter(event.values.clone(), magnetometerData);
+            isMagneticFieldSet = true;
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+        }
+    };
+
     private LocationManager locationManager;
     private GeomagneticField geomagneticField;
+
+    private LocationListener locationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            geomagneticField = new GeomagneticField(
+                    (float) location.getLatitude(),
+                    (float) location.getLongitude(),
+                    (float) location.getAltitude(),
+                    System.currentTimeMillis()
+            );
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+
+        }
+    };
 
     private boolean isGravitySet = false;
     private boolean isMagneticFieldSet = false;
@@ -75,9 +135,9 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
     protected void onResume() {
         super.onResume();
 
-        sensorManager.registerListener(this, accelerometerSensor,
+        sensorManager.registerListener(sensorListener, accelerometerSensor,
                 SensorManager.SENSOR_DELAY_GAME);
-        sensorManager.registerListener(this, magnetometerSensor,
+        sensorManager.registerListener(sensorListener, magnetometerSensor,
                 SensorManager.SENSOR_DELAY_GAME);
 
         if (PackageManager.PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -95,7 +155,7 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
             return;
         }
 
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60 * 1000, 1000, this);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60 * 1000, 1000, locationListener);
         Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         if (null == lastKnownLocation) {
             lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
@@ -107,45 +167,19 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
             lastKnownLocation.setLongitude(52.13);
         }
 
-        onLocationChanged(lastKnownLocation);
+        locationListener.onLocationChanged(lastKnownLocation);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
 
-        sensorManager.unregisterListener(this, accelerometerSensor);
-        sensorManager.unregisterListener(this, magnetometerSensor);
+        sensorManager.unregisterListener(sensorListener, accelerometerSensor);
+        sensorManager.unregisterListener(sensorListener, magnetometerSensor);
         if (PackageManager.PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
                 && PackageManager.PERMISSION_GRANTED == ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-            locationManager.removeUpdates(this);
+            locationManager.removeUpdates(locationListener);
         }
-    }
-
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        switch (event.sensor.getType()) {
-            case Sensor.TYPE_ACCELEROMETER:
-                setAccelerometerData(event);
-                break;
-            case Sensor.TYPE_MAGNETIC_FIELD:
-                setMagnetometerData(event);
-                break;
-        }
-
-        if (isGravitySet && isMagneticFieldSet) {
-            rotateRose();
-        }
-    }
-
-    private void setAccelerometerData(SensorEvent event) {
-        accelerometerData = LowPassFilter.filter(event.values.clone(), accelerometerData);
-        isGravitySet = true;
-    }
-
-    private void setMagnetometerData(SensorEvent event) {
-        magnetometerData = LowPassFilter.filter(event.values.clone(), magnetometerData);
-        isMagneticFieldSet = true;
     }
 
     private void rotateRose() {
@@ -178,33 +212,4 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
         return (float) (degrees + 360) % 360;
     }
 
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
-    }
-
-    @Override
-    public void onLocationChanged(Location location) {
-        geomagneticField = new GeomagneticField(
-                (float) location.getLatitude(),
-                (float) location.getLongitude(),
-                (float) location.getAltitude(),
-                System.currentTimeMillis()
-        );
-    }
-
-    @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
-    }
 }

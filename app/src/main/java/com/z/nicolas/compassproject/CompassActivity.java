@@ -170,7 +170,9 @@ public class CompassActivity extends Activity implements SensorEventListener, Lo
         SensorManager.getOrientation(rotationMatrix, orientation);
         double degrees = Math.toDegrees(orientation[0]);
         if (null != geomagneticField) {
-            degrees += geomagneticField.getDeclination();
+            // According to http://googlecompass.com/MagneticVariationAdjustment.htm
+            // we should subtract declination (add if it's negative and subtract if it's positive)
+            degrees -= geomagneticField.getDeclination();
         }
 
         return (float) (degrees + 360) % 360;
